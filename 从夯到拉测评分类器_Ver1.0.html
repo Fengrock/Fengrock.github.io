@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>从夯到拉测评分类器 - 优化版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+            touch-action: pan-x pan-y;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .main-content {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+                margin-bottom: 15px;
+            }
+        }
+
+        .hierarchy-column, .pool-area {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            flex: 1;
+        }
+
+        .level {
+            display: flex;
+            align-items: center;
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            min-height: 120px;
+            transition: all 0.3s ease;
+        }
+
+        .level:hover {
+            border-color: #007bff;
+        }
+
+        .level-title {
+            font-weight: bold;
+            font-size: 18px;
+            min-width: 120px;
+            color: #495057;
+            text-align: center;
+        }
+
+        .level-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            flex: 1;
+            min-height: 90px;
+            padding: 10px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .level.hang { border-color: #dc3545; background: #fff5f5; }
+        .level.renshangren { border-color: #fd7e14; background: #fff9f5; }
+        .level.zhongguijuju { border-color: #ffc107; background: #fffbf0; }
+        .level.npc { border-color: #20c997; background: #f0fff9; }
+        .level.la { border-color: #6f42c1; background: #f8f5ff; }
+
+        .item {
+            width: 80px;
+            height: 80px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            will-change: transform;
+            flex-shrink: 0;
+        }
+
+        .item:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .item.dragging {
+            opacity: 0.9;
+            transform: scale(1.1);
+            z-index: 1000;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            transition: none;
+        }
+
+        .item.ghost {
+            opacity: 0.3;
+            transform: scale(0.9);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+            -webkit-user-drag: none;
+            user-drag: none;
+            pointer-events: none;
+        }
+
+        .item-content {
+            text-align: center;
+            font-size: 12px;
+            padding: 5px;
+            background: #007bff;
+            color: white;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        .level-content.drag-over, .pool.drag-over {
+            background-color: rgba(0, 123, 255, 0.1);
+            border-color: #007bff;
+        }
+
+        .pool {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            min-height: 150px;
+            background: #f8f9fa;
+            border: 2px dashed #adb5bd;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            position: relative;
+        }
+
+        .add-item-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .statistics {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .stat-item {
+            padding: 10px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .device-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+
+        .message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 1001;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .message.show {
+            opacity: 1;
+        }
+
+        /* 垃圾桶样式 */
+        .trash-container {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 80px;
+            height: 80px;
+            z-index: 20;
+        }
+
+        .trash-item {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #dc3545;
+            border: 2px solid #dc3545;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .trash-item:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.4);
+        }
+
+        .trash-item.drag-over {
+            background-color: rgba(220, 53, 69, 0.8);
+            border-color: #c82333;
+            transform: scale(1.1);
+        }
+
+        .trash-icon {
+            font-size: 30px;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .trash-tooltip {
+            position: absolute;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            z-index: 1001;
+        }
+
+        .trash-item:hover .trash-tooltip {
+            opacity: 1;
+        }
+
+        .trash-item.drag-over .trash-tooltip {
+            opacity: 1;
+        }
+
+        /* 自适应缩放 */
+        .level-content.adaptive-5 .item {
+            width: 70px;
+            height: 70px;
+        }
+
+        .level-content.adaptive-10 .item {
+            width: 60px;
+            height: 60px;
+        }
+
+        .level-content.adaptive-15 .item {
+            width: 50px;
+            height: 50px;
+        }
+
+        .level-content.adaptive-20 .item {
+            width: 40px;
+            height: 40px;
+        }
+
+        .level-content.adaptive-25 .item {
+            width: 35px;
+            height: 35px;
+        }
+
+        .pool.adaptive-5 .item {
+            width: 70px;
+            height: 70px;
+        }
+
+        .pool.adaptive-10 .item {
+            width: 60px;
+            height: 60px;
+        }
+
+        .pool.adaptive-15 .item {
+            width: 50px;
+            height: 50px;
+        }
+
+        .pool.adaptive-20 .item {
+            width: 40px;
+            height: 40px;
+        }
+
+        .pool.adaptive-25 .item {
+            width: 35px;
+            height: 35px;
+        }
+
+        .pool.adaptive-5 .trash-container {
+            width: 70px;
+            height: 70px;
+        }
+
+        .pool.adaptive-5 .trash-icon {
+            font-size: 25px;
+        }
+
+        .pool.adaptive-10 .trash-container {
+            width: 60px;
+            height: 60px;
+        }
+
+        .pool.adaptive-10 .trash-icon {
+            font-size: 22px;
+        }
+
+        .pool.adaptive-15 .trash-container {
+            width: 50px;
+            height: 50px;
+        }
+
+        .pool.adaptive-15 .trash-icon {
+            font-size: 18px;
+        }
+
+        .pool.adaptive-20 .trash-container {
+            width: 40px;
+            height: 40px;
+        }
+
+        .pool.adaptive-20 .trash-icon {
+            font-size: 16px;
+        }
+
+        .pool.adaptive-25 .trash-container {
+            width: 35px;
+            height: 35px;
+        }
+
+        .pool.adaptive-25 .trash-icon {
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="device-indicator" id="deviceIndicator">检测设备中...</div>
+    <div class="message" id="message"></div>
+    
+    <div class="container">
+        <h1>从夯到拉测评分类器 - 优化版</h1>
+        
+        <div class="main-content">
+            <div class="hierarchy-column">
+                <h3>等级排名</h3>
+                <div class="level hang" data-level="hang">
+                    <div class="level-title">夯 🚀</div>
+                    <div class="level-content" id="hang-container"></div>
+                </div>
+                <div class="level renshangren" data-level="renshangren">
+                    <div class="level-title">人上人 👑</div>
+                    <div class="level-content" id="renshangren-container"></div>
+                </div>
+                <div class="level zhongguijuju" data-level="zhongguijuju">
+                    <div class="level-title">中规中矩 ⚖️</div>
+                    <div class="level-content" id="zhongguijuju-container"></div>
+                </div>
+                <div class="level npc" data-level="npc">
+                    <div class="level-title">NPC 👤</div>
+                    <div class="level-content" id="npc-container"></div>
+                </div>
+                <div class="level la" data-level="la">
+                    <div class="level-title">拉 💩</div>
+                    <div class="level-content" id="la-container"></div>
+                </div>
+            </div>
+
+            <div class="pool-area">
+                <h3>分类池</h3>
+                <div class="pool" id="itemPool">
+                    <div class="item" data-id="1">
+                        <div class="item-content">示例1</div>
+                    </div>
+                    <div class="item" data-id="2">
+                        <div class="item-content">示例2</div>
+                    </div>
+                    <div class="item" data-id="3">
+                        <div class="item-content">示例3</div>
+                    </div>
+                    <div class="item" data-id="4">
+                        <div class="item-content">示例4</div>
+                    </div>
+                    <div class="item" data-id="5">
+                        <div class="item-content">示例5</div>
+                    </div>
+                    <div class="item" data-id="6">
+                        <div class="item-content">示例6</div>
+                    </div>
+                    <div class="item" data-id="7">
+                        <div class="item-content">示例7</div>
+                    </div>
+                    <div class="item" data-id="8">
+                        <div class="item-content">示例8</div>
+                    </div>
+                    <div class="item" data-id="9">
+                        <div class="item-content">示例9</div>
+                    </div>
+                    <div class="item" data-id="10">
+                        <div class="item-content">示例10</div>
+                    </div>
+                    <div class="item" data-id="11">
+                        <div class="item-content">示例11</div>
+                    </div>
+                    <div class="item" data-id="12">
+                        <div class="item-content">示例12</div>
+                    </div>
+                    <div class="item" data-id="13">
+                        <div class="item-content">示例13</div>
+                    </div>
+                    <div class="item" data-id="14">
+                        <div class="item-content">示例14</div>
+                    </div>
+                    <div class="item" data-id="15">
+                        <div class="item-content">示例15</div>
+                    </div>
+                    <div class="item" data-id="16">
+                        <div class="item-content">示例16</div>
+                    </div>
+                    <div class="item" data-id="17">
+                        <div class="item-content">示例17</div>
+                    </div>
+                    <div class="item" data-id="18">
+                        <div class="item-content">示例18</div>
+                    </div>
+                    
+                    <!-- 垃圾桶容器 -->
+                    <div class="trash-container" id="trashContainer">
+                        <div class="trash-item" id="trashBin">
+                            <div class="trash-icon">🗑️</div>
+                            <div class="trash-tooltip">删除</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="add-item-form">
+                    <h3>添加新项目</h3>
+                    <div class="form-group">
+                        <label for="itemName">项目名称:</label>
+                        <input type="text" id="itemName" placeholder="输入项目名称">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>添加图片:</label>
+                        <input type="file" id="imageUpload" accept="image/*">
+                    </div>
+                    
+                    <button id="addItemBtn">添加项目</button>
+                    <button id="resetBtn">重置表单</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="statistics">
+            <h3>分类统计</h3>
+            <div class="stats-grid">
+                <div class="stat-item" style="background:#dc3545;">夯: <span id="count-hang">0</span></div>
+                <div class="stat-item" style="background:#fd7e14;">人上人: <span id="count-renshangren">0</span></div>
+                <div class="stat-item" style="background:#ffc107;">中规中矩: <span id="count-zhongguijuju">0</span></div>
+                <div class="stat-item" style="background:#20c997;">NPC: <span id="count-npc">0</span></div>
+                <div class="stat-item" style="background:#6f42c1;">拉: <span id="count-la">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class OptimizedDragManager {
+            constructor() {
+                this.draggedItem = null;
+                this.ghostItem = null;
+                this.dragOffset = { x: 0, y: 0 };
+                this.currentDropZone = null;
+                this.itemCounter = 18;
+                this.isTouchDevice = this.detectTouchDevice();
+                this.animationFrameId = null;
+                this.originalParent = null;
+                this.originalIndex = -1;
+                this.originalTransform = '';
+                this.isDragging = false;
+                this.lastX = 0;
+                this.lastY = 0;
+                this.scrollX = 0;
+                this.scrollY = 0;
+                this.existingItems = new Set();
+                
+                this.init();
+            }
+
+            detectTouchDevice() {
+                return (('ontouchstart' in window) ||
+                       (navigator.maxTouchPoints > 0) ||
+                       (navigator.msMaxTouchPoints > 0));
+            }
+
+            init() {
+                this.updateDeviceIndicator();
+                this.initializeEventListeners();
+                this.initializeForm();
+                this.updateStatistics();
+                this.initializeExistingItems();
+                this.applyAdaptiveSizing();
+                
+                window.addEventListener('scroll', () => {
+                    this.scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+                    this.scrollY = window.pageYOffset || document.documentElement.scrollTop;
+                }, { passive: true });
+            }
+
+            updateDeviceIndicator() {
+                const indicator = document.getElementById('deviceIndicator');
+                if (this.isTouchDevice) {
+                    indicator.textContent = '📱 移动端模式';
+                    indicator.style.background = 'rgba(76, 175, 80, 0.7)';
+                } else {
+                    indicator.textContent = '💻 桌面端模式';
+                    indicator.style.background = 'rgba(33, 150, 243, 0.7)';
+                }
+            }
+
+            initializeEventListeners() {
+                this.setupItemsEventListeners();
+                
+                const dropZones = document.querySelectorAll('.level-content, #itemPool, #trashBin');
+                dropZones.forEach(zone => {
+                    this.makeDropZone(zone);
+                });
+            }
+
+            setupItemsEventListeners() {
+                if (this.isTouchDevice) {
+                    document.addEventListener('touchstart', (e) => {
+                        const item = e.target.closest('.item');
+                        if (item) {
+                            this.handleTouchStart(e, item);
+                        }
+                    }, { passive: false });
+
+                    document.addEventListener('touchmove', (e) => {
+                        if (this.draggedItem) {
+                            this.handleTouchMove(e);
+                        }
+                    }, { passive: false });
+
+                    document.addEventListener('touchend', (e) => {
+                        if (this.draggedItem) {
+                            this.handleTouchEnd(e);
+                        }
+                    });
+                } else {
+                    document.addEventListener('mousedown', (e) => {
+                        const item = e.target.closest('.item');
+                        if (item) {
+                            this.handleMouseDown(e, item);
+                        }
+                    });
+
+                    document.addEventListener('mousemove', (e) => {
+                        if (this.draggedItem) {
+                            this.handleMouseMove(e);
+                        }
+                    });
+
+                    document.addEventListener('mouseup', (e) => {
+                        if (this.draggedItem) {
+                            this.handleMouseUp(e);
+                        }
+                    });
+
+                    document.addEventListener('dragstart', (e) => {
+                        if (e.target.closest('.item')) {
+                            e.preventDefault();
+                            return false;
+                        }
+                    });
+                }
+            }
+
+            handleTouchStart(e, item) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                this.startDrag(item, touch.clientX, touch.clientY);
+            }
+
+            handleTouchMove(e) {
+                if (!this.draggedItem) return;
+                
+                e.preventDefault();
+                const touch = e.touches[0];
+                this.handleDragMove(touch.clientX, touch.clientY);
+            }
+
+            handleTouchEnd(e) {
+                if (!this.draggedItem) return;
+                
+                const touch = e.changedTouches[0];
+                this.finishDrag(touch.clientX, touch.clientY);
+            }
+
+            handleMouseDown(e, item) {
+                e.preventDefault();
+                this.startDrag(item, e.clientX, e.clientY);
+            }
+
+            handleMouseMove(e) {
+                if (!this.draggedItem) return;
+                
+                e.preventDefault();
+                this.handleDragMove(e.clientX, e.clientY);
+            }
+
+            handleMouseUp(e) {
+                if (!this.draggedItem) return;
+                
+                this.finishDrag(e.clientX, e.clientY);
+            }
+
+            startDrag(item, clientX, clientY) {
+                this.draggedItem = item;
+                this.isDragging = true;
+                
+                this.scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+                this.scrollY = window.pageYOffset || document.documentElement.scrollTop;
+                
+                const rect = item.getBoundingClientRect();
+                
+                this.dragOffset.x = clientX - rect.left;
+                this.dragOffset.y = clientY - rect.top;
+                
+                this.originalParent = item.parentElement;
+                this.originalIndex = Array.from(this.originalParent.children).indexOf(item);
+                this.originalTransform = item.style.transform || '';
+                
+                // 创建虚影项目
+                this.createGhostItem(item);
+                
+                // 添加拖拽样式
+                item.classList.add('dragging');
+                
+                // 设置元素为固定定位
+                item.style.position = 'fixed';
+                item.style.left = rect.left + 'px';
+                item.style.top = rect.top + 'px';
+                item.style.width = rect.width + 'px';
+                item.style.height = rect.height + 'px';
+                item.style.zIndex = '1000';
+                item.style.transform = 'none';
+                
+                document.body.style.userSelect = 'none';
+                
+                this.lastX = clientX;
+                this.lastY = clientY;
+                
+                this.startAnimationFrame();
+            }
+
+            createGhostItem(item) {
+                this.ghostItem = item.cloneNode(true);
+                this.ghostItem.classList.add('ghost');
+                this.ghostItem.classList.remove('dragging');
+                this.ghostItem.style.position = '';
+                this.ghostItem.style.left = '';
+                this.ghostItem.style.top = '';
+                this.ghostItem.style.width = '';
+                this.ghostItem.style.height = '';
+                this.ghostItem.style.zIndex = '';
+                this.ghostItem.style.transform = '';
+                this.ghostItem.style.opacity = '0.3';
+                
+                // 插入到原位置
+                this.originalParent.insertBefore(this.ghostItem, item);
+            }
+
+            handleDragMove(clientX, clientY) {
+                this.lastX = clientX;
+                this.lastY = clientY;
+            }
+
+            finishDrag(clientX, clientY) {
+                if (!this.draggedItem) return;
+                
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                    this.animationFrameId = null;
+                }
+                
+                this.checkDropZones(clientX, clientY);
+                
+                if (this.currentDropZone) {
+                    if (this.currentDropZone.id === 'trashBin') {
+                        this.deleteItem();
+                    } else {
+                        this.dropItem(this.currentDropZone);
+                        this.currentDropZone.classList.remove('drag-over');
+                    }
+                } else {
+                    this.returnToOriginalPosition();
+                }
+                
+                // 移除虚影
+                if (this.ghostItem) {
+                    this.ghostItem.remove();
+                    this.ghostItem = null;
+                }
+                
+                this.resetDraggedItem();
+                document.body.style.userSelect = '';
+                this.updateStatistics();
+                this.applyAdaptiveSizing();
+            }
+
+            startAnimationFrame() {
+                const animate = () => {
+                    if (this.isDragging && this.draggedItem) {
+                        this.updateDragPosition(this.lastX, this.lastY);
+                        this.animationFrameId = requestAnimationFrame(animate);
+                    }
+                };
+                this.animationFrameId = requestAnimationFrame(animate);
+            }
+
+            updateDragPosition(clientX, clientY) {
+                if (!this.draggedItem || !this.isDragging) return;
+                
+                const newLeft = clientX - this.dragOffset.x;
+                const newTop = clientY - this.dragOffset.y;
+                
+                this.draggedItem.style.left = newLeft + 'px';
+                this.draggedItem.style.top = newTop + 'px';
+                
+                this.checkDropZones(clientX, clientY);
+                
+                if (this.currentDropZone && this.currentDropZone.classList.contains('level-content')) {
+                    this.updateSortPosition(clientX, clientY);
+                }
+            }
+
+            updateSortPosition(clientX, clientY) {
+                const items = Array.from(this.currentDropZone.children).filter(item => 
+                    item.classList.contains('item') && !item.classList.contains('ghost')
+                );
+                const draggedIndex = items.indexOf(this.draggedItem);
+                
+                if (draggedIndex === -1) return;
+                
+                let newIndex = -1;
+                let minDistance = Infinity;
+                
+                for (let i = 0; i < items.length; i++) {
+                    if (i === draggedIndex) continue;
+                    
+                    const item = items[i];
+                    const rect = item.getBoundingClientRect();
+                    const itemCenterX = rect.left + rect.width / 2;
+                    const itemCenterY = rect.top + rect.height / 2;
+                    
+                    const distance = Math.sqrt(
+                        Math.pow(clientX - itemCenterX, 2) + 
+                        Math.pow(clientY - itemCenterY, 2)
+                    );
+                    
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        newIndex = (clientX < itemCenterX) ? i : i + 1;
+                    }
+                }
+                
+                if (newIndex > draggedIndex) {
+                    newIndex--;
+                }
+                
+                if (newIndex !== draggedIndex && newIndex >= 0 && newIndex <= items.length) {
+                    this.draggedItem.remove();
+                    
+                    if (newIndex >= items.length - 1) {
+                        this.currentDropZone.appendChild(this.draggedItem);
+                    } else {
+                        const targetItem = items.filter(item => item !== this.draggedItem)[newIndex];
+                        this.currentDropZone.insertBefore(this.draggedItem, targetItem);
+                    }
+                }
+            }
+
+            checkDropZones(clientX, clientY) {
+                const dropZones = document.querySelectorAll('.level-content, #itemPool, #trashBin');
+                let foundZone = null;
+                
+                dropZones.forEach(zone => {
+                    const rect = zone.getBoundingClientRect();
+                    const isOverZone = clientX >= rect.left && clientX <= rect.right &&
+                                      clientY >= rect.top && clientY <= rect.bottom;
+                    
+                    if (isOverZone) {
+                        zone.classList.add('drag-over');
+                        foundZone = zone;
+                    } else {
+                        zone.classList.remove('drag-over');
+                    }
+                });
+                
+                this.currentDropZone = foundZone;
+            }
+
+            dropItem(dropZone) {
+                if (!this.draggedItem) return;
+                
+                if (this.originalParent !== dropZone) {
+                    if (this.draggedItem.parentNode) {
+                        this.draggedItem.parentNode.removeChild(this.draggedItem);
+                    }
+                    
+                    dropZone.appendChild(this.draggedItem);
+                }
+                
+                this.resetItemStyles();
+            }
+
+            returnToOriginalPosition() {
+                if (!this.draggedItem) return;
+                
+                if (this.draggedItem.parentElement !== this.originalParent) {
+                    if (this.draggedItem.parentNode) {
+                        this.draggedItem.parentNode.removeChild(this.draggedItem);
+                    }
+                    
+                    if (this.originalIndex >= this.originalParent.children.length) {
+                        this.originalParent.appendChild(this.draggedItem);
+                    } else {
+                        const targetItem = this.originalParent.children[this.originalIndex];
+                        this.originalParent.insertBefore(this.draggedItem, targetItem);
+                    }
+                }
+                
+                this.resetItemStyles();
+            }
+
+            deleteItem() {
+                if (!this.draggedItem) return;
+                
+                const itemName = this.getItemName(this.draggedItem);
+                this.existingItems.delete(itemName);
+                this.draggedItem.remove();
+                this.showMessage(`项目 "${itemName}" 已删除`);
+                this.resetItemStyles();
+                
+                // 修复：删除操作后立即移除垃圾桶的drag-over类
+                const trashBin = document.getElementById('trashBin');
+                if (trashBin) {
+                    trashBin.classList.remove('drag-over');
+                }
+            }
+
+            resetItemStyles() {
+                if (!this.draggedItem) return;
+                
+                this.draggedItem.style.position = '';
+                this.draggedItem.style.left = '';
+                this.draggedItem.style.top = '';
+                this.draggedItem.style.width = '';
+                this.draggedItem.style.height = '';
+                this.draggedItem.style.zIndex = '';
+                this.draggedItem.style.transform = this.originalTransform;
+            }
+
+            resetDraggedItem() {
+                if (this.draggedItem) {
+                    this.draggedItem.classList.remove('dragging');
+                    this.resetItemStyles();
+                }
+                
+                this.draggedItem = null;
+                this.currentDropZone = null;
+                this.originalParent = null;
+                this.originalIndex = -1;
+                this.originalTransform = '';
+                this.isDragging = false;
+            }
+
+            makeDropZone(container) {
+                if (this.isTouchDevice) {
+                    container.addEventListener('touchmove', (e) => {
+                        if (this.draggedItem) {
+                            e.preventDefault();
+                        }
+                    }, { passive: false });
+                    
+                    container.addEventListener('touchend', (e) => {
+                        container.classList.remove('drag-over');
+                    });
+                } else {
+                    container.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        if (this.draggedItem) {
+                            container.classList.add('drag-over');
+                        }
+                    });
+                    
+                    container.addEventListener('dragleave', (e) => {
+                        if (!container.contains(e.relatedTarget)) {
+                            container.classList.remove('drag-over');
+                        }
+                    });
+                }
+            }
+
+            initializeForm() {
+                const addBtn = document.getElementById('addItemBtn');
+                const resetBtn = document.getElementById('resetBtn');
+                const imageUpload = document.getElementById('imageUpload');
+                
+                addBtn.addEventListener('click', () => this.addNewItem());
+                resetBtn.addEventListener('click', () => this.resetForm());
+                imageUpload.addEventListener('change', (e) => this.handleImageUpload(e));
+            }
+
+            addNewItem() {
+                const nameInput = document.getElementById('itemName');
+                const name = nameInput.value.trim();
+                const imageFile = document.getElementById('imageUpload').files[0];
+
+                if (!name) {
+                    this.showMessage('请输入项目名称');
+                    return;
+                }
+
+                if (this.existingItems.has(name)) {
+                    this.showMessage(`项目 "${name}" 已存在，请使用不同的名称`);
+                    return;
+                }
+
+                this.itemCounter++;
+                const newItem = document.createElement('div');
+                newItem.className = 'item';
+                newItem.draggable = false;
+                newItem.dataset.id = this.itemCounter;
+
+                if (imageFile) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        newItem.innerHTML = `<img src="${e.target.result}" alt="${name}">`;
+                        const itemPool = document.getElementById('itemPool');
+                        const trashContainer = document.getElementById('trashContainer');
+                        itemPool.insertBefore(newItem, trashContainer);
+                        this.existingItems.add(name);
+                        this.updateStatistics();
+                        this.applyAdaptiveSizing();
+                        this.showMessage(`项目 "${name}" 添加成功`);
+                    };
+                    reader.readAsDataURL(imageFile);
+                } else {
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'item-content';
+                    contentDiv.textContent = name;
+                    newItem.appendChild(contentDiv);
+                    const itemPool = document.getElementById('itemPool');
+                    const trashContainer = document.getElementById('trashContainer');
+                    itemPool.insertBefore(newItem, trashContainer);
+                    this.existingItems.add(name);
+                    this.updateStatistics();
+                    this.applyAdaptiveSizing();
+                    this.showMessage(`项目 "${name}" 添加成功`);
+                }
+
+                this.resetForm();
+            }
+
+            handleImageUpload(e) {
+                console.log('图片已选择');
+            }
+
+            resetForm() {
+                document.getElementById('itemName').value = '';
+                document.getElementById('imageUpload').value = '';
+            }
+
+            updateStatistics() {
+                const levels = ['hang', 'renshangren', 'zhongguijuju', 'npc', 'la'];
+                levels.forEach(level => {
+                    const count = document.getElementById(`${level}-container`).children.length;
+                    document.getElementById(`count-${level}`).textContent = count;
+                });
+            }
+
+            initializeExistingItems() {
+                const items = document.querySelectorAll('.item');
+                items.forEach(item => {
+                    const name = this.getItemName(item);
+                    if (name) {
+                        this.existingItems.add(name);
+                    }
+                });
+            }
+
+            getItemName(item) {
+                const img = item.querySelector('img');
+                if (img && img.alt) {
+                    return img.alt;
+                }
+                
+                const textContent = item.textContent.trim();
+                if (textContent) {
+                    return textContent;
+                }
+                
+                return '';
+            }
+
+            showMessage(text) {
+                const messageEl = document.getElementById('message');
+                messageEl.textContent = text;
+                messageEl.classList.add('show');
+                
+                setTimeout(() => {
+                    messageEl.classList.remove('show');
+                }, 3000);
+            }
+
+            applyAdaptiveSizing() {
+                const levelContainers = document.querySelectorAll('.level-content');
+                const poolContainer = document.getElementById('itemPool');
+                
+                levelContainers.forEach(container => {
+                    container.classList.remove('adaptive-5', 'adaptive-10', 'adaptive-15', 'adaptive-20', 'adaptive-25');
+                    
+                    const itemCount = container.querySelectorAll('.item').length;
+                    
+                    if (itemCount >= 25) {
+                        container.classList.add('adaptive-25');
+                    } else if (itemCount >= 20) {
+                        container.classList.add('adaptive-20');
+                    } else if (itemCount >= 15) {
+                        container.classList.add('adaptive-15');
+                    } else if (itemCount >= 10) {
+                        container.classList.add('adaptive-10');
+                    } else if (itemCount >= 5) {
+                        container.classList.add('adaptive-5');
+                    }
+                });
+                
+                if (poolContainer) {
+                    poolContainer.classList.remove('adaptive-5', 'adaptive-10', 'adaptive-15', 'adaptive-20', 'adaptive-25');
+                    
+                    const itemCount = poolContainer.querySelectorAll('.item').length;
+                    
+                    if (itemCount >= 25) {
+                        poolContainer.classList.add('adaptive-25');
+                    } else if (itemCount >= 20) {
+                        poolContainer.classList.add('adaptive-20');
+                    } else if (itemCount >= 15) {
+                        poolContainer.classList.add('adaptive-15');
+                    } else if (itemCount >= 10) {
+                        poolContainer.classList.add('adaptive-10');
+                    } else if (itemCount >= 5) {
+                        poolContainer.classList.add('adaptive-5');
+                    }
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new OptimizedDragManager();
+        });
+    </script>
+</body>
+</html>
